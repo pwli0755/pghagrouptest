@@ -1,48 +1,67 @@
 package main
 
 import (
-	"database/sql"
+	"b/ent"
+	"b/ent/user"
+	"context"
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
 	"fmt"
-	"net"
-	"os"
+	"github.com/jackc/pgx/v4"
+	_ "github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v4/stdlib"
+	"log"
 	"time"
-
-	"github.com/jackc/pgx"
-	stdpgx "github.com/jackc/pgx/stdlib"
 )
 
 func main() {
-	config := pgx.ConnConfig{
-		Host:     "127.0.0.1:5433,127.0.0.1:5432",
-		User:     "haha_user",
-		Password: "secret",
-		Database: "haha",
-		Dial: (&net.Dialer{
-			KeepAlive: 5 * time.Minute,
-			Timeout:   100 * time.Millisecond,
-		}).Dial,
-		TargetSessionAttrs: pgx.ReadWriteTargetSession, // read-write used to select writable (master) db.
-		RuntimeParams: map[string]string{
-			"standard_conforming_strings": "on",
-		},
-		PreferSimpleProtocol: true,
-	}
 
-	db := stdpgx.OpenDB(config)
-
-	err := db.Ping()
+	confWrite, err := pgx.ParseConfig("postgres://haha_user:secret@127.0.0.1:5433,127.0.0.1:5432/haha?sslmode=disable&target_session_attrs=primary")
 	if err != nil {
-		fmt.Printf("failed to ping database: %v\n", err)
-		os.Exit(1)
+		log.Fatal(err)
 	}
 
-	db.SetMaxIdleConns(32)
-	db.SetMaxOpenConns(32)
+	confRead, err := pgx.ParseConfig("postgres://haha_user:secret@127.0.0.1:5433,127.0.0.1:5432/haha?sslmode=disable&target_session_attrs=prefer-standby")
+	if err != nil {
+		log.Fatal(err)
+	}
+	wd, rd := stdlib.OpenDB(*confWrite), stdlib.OpenDB(*confRead)
+
+	//_, err = wd.Exec(`INSERT INTO "users" ("age", "name") VALUES (30, 'a8m')`)
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
+	//_, err = rd.Exec(`INSERT INTO "users" ("age", "name") VALUES (30, 'a8m')`)
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
+	_ = rd
+	entClient := ent.NewClient(ent.Driver(&multiDriver{r: entsql.OpenDB(dialect.Postgres, rd), w: entsql.OpenDB(dialect.Postgres, wd)})).Debug()
+	defer entClient.Close()
+
+	ctx := context.Background()
+	// Run the auto migration tool.
+	//if err := entClient.Schema.Create(ctx); err != nil {
+	//	log.Fatalf("failed creating schema resources: %v", err)
+	//}
 
 	for {
+
+		fmt.Println("try to insert")
+
+		_, err = CreateUser(ctx, entClient)
+		if err != nil {
+			time.Sleep(1 * time.Second)
+			fmt.Println("CreateUser error: ", err)
+
+			continue
+		}
+
+		fmt.Println("successfully inserted!")
+
 		fmt.Println("try to select")
 
-		err = tryToSelect(db)
+		_, err = QueryUser(ctx, entClient)
 		if err != nil {
 			time.Sleep(1 * time.Second)
 
@@ -51,62 +70,79 @@ func main() {
 
 		fmt.Println("successfully selected!")
 
-		fmt.Println("try to insert")
-
-		err = tryToInsert(db)
-		if err != nil {
-			time.Sleep(1 * time.Second)
-
-			continue
-		}
-
-		fmt.Println("successfully inserted!")
-
 		time.Sleep(5 * time.Second)
 	}
 }
 
-func tryToSelect(db *sql.DB) error {
-	rows, err := db.Query("select name, value from t;")
+func CreateUser(ctx context.Context, client *ent.Client) (*ent.User, error) {
+	u, err := client.User.
+		Create().
+		SetAge(30).
+		SetName("a8m").
+		Save(ctx)
 	if err != nil {
-		fmt.Printf("failed to query data: %v\n", err)
-
-		return err
+		return nil, fmt.Errorf("failed creating user: %w", err)
 	}
-	defer rows.Close() // nolint: errcheck
-
-	for rows.Next() {
-		var name, value string
-
-		err = rows.Scan(&name, &value)
-		if err != nil {
-			fmt.Printf("failed to scan row: %v\n", err)
-
-			continue
-		}
-
-		fmt.Printf("selected name: %s, value %s\n", name, value)
-	}
-
-	err = rows.Err()
-	if err != nil {
-		fmt.Printf("rows error: %v\n", err)
-
-		return err
-	}
-
-	return nil
+	log.Println("user was created: ", u)
+	return u, nil
 }
 
-func tryToInsert(db *sql.DB) error {
-	const q = `insert into t (name, value) values ('Anton', '{"test2": 2}'::jsonb)`
-
-	_, err := db.Exec(q)
+func QueryUser(ctx context.Context, client *ent.Client) (*ent.User, error) {
+	u, err := client.User.
+		Query().
+		Where(user.NameEQ("a8m")).
+		// `Only` fails if no user found,
+		// or more than 1 user returned.
+		Only(ctx)
 	if err != nil {
-		fmt.Printf("failed to exec: %v\n", err)
-
-		return err
+		return nil, fmt.Errorf("failed querying user: %w", err)
 	}
-
-	return nil
+	log.Println("user returned: ", u)
+	return u, nil
 }
+
+//
+//func tryToSelect(db *sql.DB) error {
+//	rows, err := db.Query("select name, value from t;")
+//	if err != nil {
+//		fmt.Printf("failed to query data: %v\n", err)
+//
+//		return err
+//	}
+//	defer rows.Close() // nolint: errcheck
+//
+//	for rows.Next() {
+//		var name, value string
+//
+//		err = rows.Scan(&name, &value)
+//		if err != nil {
+//			fmt.Printf("failed to scan row: %v\n", err)
+//
+//			continue
+//		}
+//
+//		fmt.Printf("selected name: %s, value %s\n", name, value)
+//	}
+//
+//	err = rows.Err()
+//	if err != nil {
+//		fmt.Printf("rows error: %v\n", err)
+//
+//		return err
+//	}
+//
+//	return nil
+//}
+//
+//func tryToInsert(db *sql.DB) error {
+//	const q = `insert into t (name, value) values ('Anton', '{"test2": 2}'::jsonb)`
+//
+//	_, err := db.Exec(q)
+//	if err != nil {
+//		fmt.Printf("failed to exec: %v\n", err)
+//
+//		return err
+//	}
+//
+//	return nil
+//}

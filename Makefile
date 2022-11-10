@@ -2,18 +2,19 @@ PWD=$(shell pwd)
 
 .PHONY: master
 master:
-	docker run --rm -d --net=host \
+	docker run --rm -p 5432:5432 -d  \
 		--name pg1 \
+		-e POSTGRES_PASSWORD=password \
 		-v $(PWD)/dbprepare.sh:/docker-entrypoint-initdb.d/init.sh \
-		-v $(PWD)/backup:/backup \
-		postgres:11
+		postgres:14
 
 .PHONY: standby
 standby:
-	docker run --rm -d --net=host \
+	docker run  -p 5433:5432 -d \
 		--name pg2 \
-		-v $(PWD)/backup:/var/lib/postgresql/data \
-		postgres:11
+		-e POSTGRES_PASSWORD=password \
+		-v $(PWD)/dbprepare.sh:/docker-entrypoint-initdb.d/init.sh \
+		postgres:14
 
 .PHONY: promote
 promote:

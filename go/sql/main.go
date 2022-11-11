@@ -46,6 +46,19 @@ func main() {
 
 	ctx := context.Background()
 
+	InitGorm()
+
+	err = CreateUserGorm(ctx, db)
+	if err != nil {
+		log.Println("==============  CreateUserGorm  ===============", err)
+	}
+
+	user, err := QueryUserGorm(ctx, db)
+	if err != nil {
+		log.Println("==============  QueryUserGorm  ===============", err)
+	}
+	log.Println("QueryUserGorm: ", user)
+
 	for {
 
 		fmt.Println("try to insert")

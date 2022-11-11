@@ -27,23 +27,24 @@ func main() {
 	}
 	wd, rd := stdlib.OpenDB(*confWrite), stdlib.OpenDB(*confRead)
 
-	//_, err = wd.Exec(`INSERT INTO "users" ("age", "name") VALUES (30, 'a8m')`)
-	//if err != nil {
-	//	log.Fatal(err)
-	//}
-	//_, err = rd.Exec(`INSERT INTO "users" ("age", "name") VALUES (30, 'a8m')`)
-	//if err != nil {
-	//	log.Fatal(err)
-	//}
+	//Run the auto migration tool.
+	if err := ent.NewClient(ent.Driver(entsql.OpenDB(dialect.Postgres, wd))).Debug().Schema.Create(context.Background()); err != nil {
+		log.Printf("failed creating schema resources: %v\n", err)
+	}
+
+	_, err = wd.Exec(`INSERT INTO "users" ("age", "name") VALUES (30, 'a8m')`)
+	if err != nil {
+		log.Fatal(err)
+	}
+	_, err = rd.Exec(`INSERT INTO "users" ("age", "name") VALUES (30, 'a8m')`)
+	if err != nil {
+		log.Fatal(err)
+	}
 	_ = rd
 	entClient := ent.NewClient(ent.Driver(&multiDriver{r: entsql.OpenDB(dialect.Postgres, rd), w: entsql.OpenDB(dialect.Postgres, wd)})).Debug()
 	defer entClient.Close()
 
 	ctx := context.Background()
-	// Run the auto migration tool.
-	//if err := entClient.Schema.Create(ctx); err != nil {
-	//	log.Fatalf("failed creating schema resources: %v", err)
-	//}
 
 	for {
 

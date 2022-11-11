@@ -38,7 +38,7 @@ func main() {
 	}
 	_, err = rd.Exec(`INSERT INTO "users" ("age", "name") VALUES (30, 'a8m')`)
 	if err != nil {
-		log.Fatal(err)
+		log.Println("========rd=======", err)
 	}
 	_ = rd
 	entClient := ent.NewClient(ent.Driver(&multiDriver{r: entsql.OpenDB(dialect.Postgres, rd), w: entsql.OpenDB(dialect.Postgres, wd)})).Debug()

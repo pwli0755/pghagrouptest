@@ -5,6 +5,7 @@ import (
 	"context"
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
+	"strings"
 )
 
 type multiDriver struct {
@@ -18,6 +19,9 @@ func (d *multiDriver) Dialect() string {
 var _ dialect.Driver = (*multiDriver)(nil)
 
 func (d *multiDriver) Query(ctx context.Context, query string, args, v any) error {
+	if strings.HasPrefix(query, "INSERT") {
+		return d.w.Query(ctx, query, args, v)
+	}
 	return d.r.Query(ctx, query, args, v)
 }
 

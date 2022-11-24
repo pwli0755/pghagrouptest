@@ -25,7 +25,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	wd, rd := stdlib.OpenDB(*confWrite), stdlib.OpenDB(*confRead)
+	wd, rd := stdlib.OpenDB(*confWrite), stdlib.OpenDB(*confRead, stdlib.OptionBeforeConnect(stdlib.RandomizeHostOrderFunc))
 
 	//Run the auto migration tool.
 	if err := ent.NewClient(ent.Driver(entsql.OpenDB(dialect.Postgres, wd))).Debug().Schema.Create(context.Background()); err != nil {
